@@ -122,6 +122,7 @@ const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
 
 // 把 Firebase 錯誤代碼轉成看得懂的中文說明,並顯示在畫面上
 function showAuthError(err) {
@@ -171,6 +172,7 @@ const Game = (() => {
     const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]], EDGES = [1,3,5,7], CORNERS = [0,2,6,8], CENTER = 4;
     let b = Array(9).fill(""), turn = "X", isPvC = true, scores = {X:0, O:0, D:0}, isThinking = false, currentRandomDiff = "mid";
     let currentUser = null;
+    let unsubscribeUserScore = null;
 
     const checkWin = (board) => {
         for (let [a, b1, c] of WINS) { if (board[a] && board[a] === board[b1] && board[a] === board[c]) return board[a]; }
@@ -286,6 +288,10 @@ const Game = (() => {
         const statusText = document.getElementById('authStatus');
         const loginBtn = document.getElementById('loginBtn');
         const logoutBtn = document.getElementById('logoutBtn');
+
+        // 無論登入或登出，先解除上一個帳號的雲端監聽，避免資料殘留到新帳號畫面上
+        if (unsubscribeUserScore) { unsubscribeUserScore(); unsubscribeUserScore = null; }
+
         if (user) {
             currentUser = user;
             clearAuthError();
@@ -294,14 +300,16 @@ const Game = (() => {
             loginBtn.style.display = 'none';
             logoutBtn.style.display = 'inline-block';
 
+            // 切換帳號時先歸零，避免短暫顯示上一個帳號的分數
+            scores.X = 0;
+            update();
+
             // 讀取該登入玩家在 Realtime Database 中的分數歷史紀錄
             const userRef = ref(db, 'scores/' + user.uid);
-            onValue(userRef, (snapshot) => {
+            unsubscribeUserScore = onValue(userRef, (snapshot) => {
                 const data = snapshot.val();
-                if (data && data.wins !== undefined) {
-                    scores.X = data.wins;
-                    update();
-                }
+                scores.X = (data && data.wins !== undefined) ? data.wins : 0;
+                update();
             }, (err) => showAuthError(err));
         } else {
             currentUser = null;
@@ -309,6 +317,10 @@ const Game = (() => {
             statusText.style.color = "#666";
             loginBtn.style.display = 'inline-block';
             logoutBtn.style.display = 'none';
+
+            // 登出後歸零電腦對戰分數，避免殘留上一個帳號的資料
+            scores = {X:0, O:0, D:0};
+            update();
         }
     }
 
@@ -323,7 +335,7 @@ const Game = (() => {
                 clearAuthError();
                 signInWithPopup(auth, provider).catch(err => showAuthError(err));
             };
-            document.getElementById('logoutBtn').onclick = () => signOut(auth);
+            document.getElementById('logoutBtn').onclick = () => signOut(auth).catch(err => showAuthError(err));
 
             // 排行榜實時監聽 (以 scores/ 節點下的 wins 排序，從多到少)
             const rankRef = query(ref(db, 'scores'), orderByChild('wins'), limitToLast(5));
