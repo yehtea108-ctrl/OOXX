@@ -34,7 +34,9 @@
         .btn-d { background: #fff1f0; color: #ff3b30; font-size: 11px; }
 
         /* 帳號與排行榜樣式 */
-        #auth-area { background: white; padding: 10px; border-radius: 50px; text-align: center; font-size: 12px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+        #auth-area { background: white; padding: 10px; border-radius: 20px; text-align: center; font-size: 12px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+        #authRow { display: flex; align-items: center; justify-content: center; }
+        #authError { display: none; margin-top: 8px; padding: 8px; background: #fff1f0; color: #cc2f26; border-radius: 10px; font-size: 11px; font-weight: normal; text-align: left; line-height: 1.5; white-space: pre-wrap; }
         .rank-box { background: white; padding: 15px; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); margin-top: 5px; text-align: left; }
         .rank-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #eee; font-size: 13px; font-weight: bold; }
     </style>
@@ -43,9 +45,12 @@
 <div class="container">
     
     <div id="auth-area">
-        <span id="authStatus" style="color: #666;">正在同步雲端狀態...</span>
-        <button id="loginBtn" style="padding: 4px 10px; font-size: 11px; background: #007aff; color: white; border-radius: 20px; margin-left: 8px; display: none;">Google 登入</button>
-        <button id="logoutBtn" style="padding: 4px 10px; font-size: 11px; background: #8e8e93; color: white; border-radius: 20px; margin-left: 8px; display: none;">登出</button>
+        <div id="authRow">
+            <span id="authStatus" style="color: #666;">正在同步雲端狀態...</span>
+            <button id="loginBtn" style="padding: 4px 10px; font-size: 11px; background: #007aff; color: white; border-radius: 20px; margin-left: 8px; display: none;">Google 登入</button>
+            <button id="logoutBtn" style="padding: 4px 10px; font-size: 11px; background: #8e8e93; color: white; border-radius: 20px; margin-left: 8px; display: none;">登出</button>
+        </div>
+        <div id="authError"></div>
     </div>
 
     <div class="panel">
@@ -94,7 +99,7 @@
 "use strict";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-database.js";
 
 // Firebase 設定
@@ -114,6 +119,50 @@ const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const provider = new GoogleAuthProvider();
+
+// 把 Firebase 錯誤代碼轉成看得懂的中文說明,並顯示在畫面上
+function showAuthError(err) {
+    console.error("登入錯誤:", err);
+    const box = document.getElementById('authError');
+    const code = err && err.code ? err.code : "unknown";
+    let msg;
+    switch (code) {
+        case "auth/unauthorized-domain":
+            msg = `目前網域「${location.hostname}」尚未加入 Firebase 授權清單。\n請到 Firebase Console → Authentication → Settings → Authorized domains,新增「${location.hostname}」。`;
+            break;
+        case "auth/popup-blocked":
+            msg = "瀏覽器擋下了登入彈出視窗。請允許彈出視窗後再試一次(通常網址列右側會有被擋下的提示可以點選允許)。";
+            break;
+        case "auth/popup-closed-by-user":
+            msg = "登入視窗在完成前被關閉了,請再試一次並完成 Google 登入流程。";
+            break;
+        case "auth/cancelled-popup-request":
+            msg = "偵測到重複的登入請求,已自動取消其中一個,請再按一次登入。";
+            break;
+        case "auth/operation-not-supported-in-this-environment":
+        case "auth/web-storage-unsupported":
+            msg = "目前瀏覽器環境不支援彈出視窗登入方式,已改用跳轉方式,請稍候。";
+            attemptRedirectFallback();
+            break;
+        case "auth/network-request-failed":
+            msg = "網路連線異常,請確認網路狀態後再試一次。";
+            break;
+        default:
+            msg = `登入發生錯誤(${code}):${err && err.message ? err.message : "未知錯誤"}`;
+    }
+    box.innerText = msg;
+    box.style.display = "block";
+}
+
+function clearAuthError() {
+    const box = document.getElementById('authError');
+    box.style.display = "none";
+    box.innerText = "";
+}
+
+function attemptRedirectFallback() {
+    signInWithRedirect(auth, provider).catch(err => showAuthError(err));
+}
 
 const Game = (() => {
     const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]], EDGES = [1,3,5,7], CORNERS = [0,2,6,8], CENTER = 4;
@@ -236,6 +285,7 @@ const Game = (() => {
         const logoutBtn = document.getElementById('logoutBtn');
         if (user) {
             currentUser = user;
+            clearAuthError();
             statusText.innerText = `玩家：${user.displayName || '雲端玩家'}`;
             statusText.style.color = "#007aff";
             loginBtn.style.display = 'none';
@@ -249,7 +299,7 @@ const Game = (() => {
                     scores.X = data.wins;
                     update();
                 }
-            });
+            }, (err) => showAuthError(err));
         } else {
             currentUser = null;
             statusText.innerText = "遊客模式 (成績不計排行)";
@@ -261,9 +311,15 @@ const Game = (() => {
 
     return {
         init: () => {
+            // 若剛剛是用跳轉方式登入回來的，先確認結果並顯示錯誤（若有）
+            getRedirectResult(auth).catch(err => showAuthError(err));
+
             // Firebase 身份監聽與事件
             onAuthStateChanged(auth, user => updateUserUI(user));
-            document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider).catch(err => console.error(err));
+            document.getElementById('loginBtn').onclick = () => {
+                clearAuthError();
+                signInWithPopup(auth, provider).catch(err => showAuthError(err));
+            };
             document.getElementById('logoutBtn').onclick = () => signOut(auth);
 
             // 排行榜實時監聽 (以 scores/ 節點下的 wins 排序，從多到少)
@@ -282,7 +338,7 @@ const Game = (() => {
                     html += `<div class="rank-item"><span>${idx+1}. ${data.name || '玩家'}</span><strong>${data.wins} 勝 👑</strong></div>`;
                 });
                 document.getElementById('leaderboard').innerHTML = html || "暫無紀錄，快來當第一名！";
-            });
+            }, (err) => console.error("排行榜讀取失敗:", err));
 
             rollDifficulty();
             document.querySelectorAll('.cell').forEach(el => {
