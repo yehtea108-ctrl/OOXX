@@ -1,309 +1,179 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>圈圈叉叉 Pro - 雲端排行版</title>
-    <style>
-        :root { --bg: #f2f2f7; --x: #007aff; --o: #ff3b30; }
-        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; user-select: none; touch-action: manipulation; }
-        body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: var(--bg); font-family: -apple-system, sans-serif; padding: 20px; transition: background 0.3s ease; }
-        .container { width: 310px; display: flex; flex-direction: column; gap: 12px; }
-        .panel { background: white; padding: 12px; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 8px; }
-        .config-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .config-item { display: flex; flex-direction: column; align-items: center; font-size: 10px; font-weight: bold; color: #444; }
-        input[type="color"] { border: none; width: 28px; height: 28px; background: none; cursor: pointer; }
-        select { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid #eee; font-size: 14px; outline: none; background: #f8f8f8; font-weight: bold; }
-        .score-board { display: flex; justify-content: space-around; background: white; padding: 12px; border-radius: 50px; font-weight: 800; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
-        .status-container { height: 40px; position: relative; display: flex; align-items: center; justify-content: center; width: 100%; }
-        .status { font-size: 16px; font-weight: 800; color: #1c1c1e; transition: opacity 0.2s; text-align: center; }
-        .status.hidden { opacity: 0; }
-        .think-overlay { position: absolute; display: none; align-items: center; justify-content: center; width: 100%; height: 100%; }
-        .dot-flashing { position: relative; width: 6px; height: 6px; border-radius: 5px; background-color: #8e8e93; animation: dotFlashing 1s infinite linear alternate; animation-delay: .5s; }
-        .dot-flashing::before, .dot-flashing::after { content: ''; display: inline-block; position: absolute; top: 0; width: 6px; height: 6px; border-radius: 5px; background-color: #8e8e93; animation: dotFlashing 1s infinite alternate; }
-        .dot-flashing::before { left: -12px; animation-delay: 0s; }
-        .dot-flashing::after { left: 12px; animation-delay: 1s; }
-        @keyframes dotFlashing { 0% { background-color: #8e8e93; } 50%, 100% { background-color: #e5e5ea; } }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .cell { width: 95px; height: 95px; background: white; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 900; box-shadow: 0 4px 10px rgba(0,0,0,0.02); cursor: pointer; transition: transform 0.1s; }
-        .cell:active { transform: scale(0.95); background: #f0f0f5; }
-        .controls { display: flex; flex-direction: column; gap: 8px; }
-        button { padding: 12px; border: none; border-radius: 15px; font-weight: bold; cursor: pointer; font-size: 14px; }
-        .btn-p { background: #1c1c1e; color: white; }
-        .btn-s { background: #e5e5ea; color: #1c1c1e; }
-        .btn-d { background: #fff1f0; color: #ff3b30; font-size: 11px; }
-
-        /* 帳號與排行榜樣式 */
-        #auth-area { background: white; padding: 10px; border-radius: 50px; text-align: center; font-size: 12px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
-        .rank-box { background: white; padding: 15px; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); margin-top: 5px; text-align: left; }
-        .rank-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #eee; font-size: 13px; font-weight: bold; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firebase Google 登入與資料庫示範</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+    button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
+    .card { border: 1px solid #ccc; padding: 15px; margin-top: 15px; border-radius: 8px; }
+  </style>
 </head>
 <body>
-<div class="container">
-    
-    <div id="auth-area">
-        <span id="authStatus" style="color: #666;">正在同步雲端狀態...</span>
-        <button id="loginBtn" style="padding: 4px 10px; font-size: 11px; background: #007aff; color: white; border-radius: 20px; margin-left: 8px; display: none;">綁定 Google</button>
-    </div>
 
-    <div class="panel">
-        <div class="config-row">
-            <div class="config-item">背景<input type="color" id="cBg" value="#f2f2f7"></div>
-            <div class="config-item">玩家X<input type="color" id="cX" value="#007aff"></div>
-            <div class="config-item">玩家O<input type="color" id="cO" value="#ff3b30"></div>
-        </div>
-        <select id="diff">
-            <option value="random" selected>隨機挑戰 (常人/大師/變化)</option>
-            <option value="chaos">模式：變化 (混合智慧)</option>
-            <option value="hard">模式：大師</option>
-            <option value="mid">模式：常人</option>
-            <option value="easy">模式：入門 (隨機)</option>
-        </select>
-    </div>
-    
-    <div class="score-board">
-        <span id="sX">X: 0</span> <span id="sD">平手: 0</span> <span id="sO">O: 0</span>
-    </div>
-    
-    <div class="status-container">
-        <div id="msg" class="status"></div>
-        <div id="thinkOverlay" class="think-overlay"><div class="dot-flashing"></div></div>
-    </div>
-    
-    <div class="grid">
-        <div class="cell" data-i="0"></div><div class="cell" data-i="1"></div><div class="cell" data-i="2"></div>
-        <div class="cell" data-i="3"></div><div class="cell" data-i="4"></div><div class="cell" data-i="5"></div>
-        <div class="cell" data-i="6"></div><div class="cell" data-i="7"></div><div class="cell" data-i="8"></div>
-    </div>
-    
-    <div class="controls">
-        <button class="btn-p" id="modeBtn">模式：對戰電腦</button>
-        <button class="btn-s" id="resetBtn">重新開局</button>
-        <button class="btn-d" id="clearBtn">重置分數紀錄</button>
-    </div>
+  <h2>Firebase 分數系統</h2>
 
-    <div class="rank-box">
-        <h3 style="margin: 0 0 10px 0; font-size: 14px; text-align: center; color: #1c1c1e;">🏆 電腦對戰勝場榜 (前5名)</h3>
-        <div id="leaderboard" style="font-size: 12px; color: #666; text-align: center;">載入中...</div>
-    </div>
-</div>
+  <div id="auth-section">
+    <button id="login-btn">使用 Google 登入</button>
+    <button id="logout-btn" style="display: none;">登出</button>
+  </div>
 
-<script type="module">
-"use strict";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+  <div id="user-info" class="card" style="display: none;">
+    <h3>使用者資訊</h3>
+    <p>姓名：<span id="user-name"></span></p>
+    <p>UID：<span id="user-uid"></span></p>
 
-const firebaseConfig = {
-    apiKey: "AIzaSyDbK2ckyJP_RlAGEcTUlOfk3nlWfwDa_HQ",
-    authDomain: "a2b-89299.firebaseapp.com",
-    projectId: "a2b-89299",
-    storageBucket: "a2b-89299.firebasestorage.app",
-    messagingSenderId: "685135427869",
-    appId: "1:685135427869:web:8e6ddc7f971e84b86b89f4",
-    databaseURL: "//a2b-89299-default-rtdb.asia-southeast1.firebasedatabase.app/"
-};
+    <hr>
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-const provider = new GoogleAuthProvider();
+    <h3>分數管理 (對應 scores/$uid 規則)</h3>
+    <label for="score-input">輸入新分數：</label>
+    <input type="number" id="score-input" placeholder="請輸入數字">
+    <button id="save-score-btn">儲存分數</button>
+    <button id="read-score-btn">讀取我的分數</button>
 
-const Game = (() => {
-    const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]], EDGES = [1,3,5,7], CORNERS = [0,2,6,8], CENTER = 4;
-    let b = Array(9).fill(""), turn = "X", isPvC = true, scores = {X:0, O:0, D:0}, isThinking = false, currentRandomDiff = "mid";
+    <p>目前資料庫分數：<strong id="current-score">尚未讀取</strong></p>
+  </div>
+
+  <script type="module">
+    // 1. 匯入所需的 SDK 模組
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js";
+    import { 
+      getAuth, 
+      signInWithPopup, 
+      GoogleAuthProvider, 
+      signOut, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+    import { 
+      getDatabase, 
+      ref, 
+      set, 
+      get 
+    } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-database.js";
+
+    // 2. Firebase 設定檔
+    const firebaseConfig = {
+      apiKey: "AIzaSyB2wAAQrplWWXR8r4feft1X6fjpV-omh_0",
+      authDomain: "tttt-b6efa.firebaseapp.com",
+      databaseURL: "https://tttt-b6efa-default-rtdb.firebaseio.com",
+      projectId: "tttt-b6efa",
+      storageBucket: "tttt-b6efa.firebasestorage.app",
+      messagingSenderId: "1037464180661",
+      appId: "1:1037464180661:web:a1b19e3420ee6e331debfc",
+      measurementId: "G-HRL1XD4RZW"
+    };
+
+    // 3. 初始化 Firebase 服務
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const auth = getAuth(app);
+    const database = getDatabase(app);
+    const provider = new GoogleAuthProvider();
+
+    // DOM 元素
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const userInfo = document.getElementById("user-info");
+    const userNameSpan = document.getElementById("user-name");
+    const userUidSpan = document.getElementById("user-uid");
+    const scoreInput = document.getElementById("score-input");
+    const saveScoreBtn = document.getElementById("save-score-btn");
+    const readScoreBtn = document.getElementById("read-score-btn");
+    const currentScoreSpan = document.getElementById("current-score");
+
     let currentUser = null;
 
-    const checkWin = (board) => {
-        for (let [a, b1, c] of WINS) { if (board[a] && board[a] === board[b1] && board[a] === board[c]) return board[a]; }
-        return board.includes("") ? null : "D";
-    };
+    // 4. Google 登入事件
+    loginBtn.addEventListener("click", () => {
+      signInWithPopup(auth, provider)
+        .then((result) => {
+          console.log("登入成功：", result.user.displayName);
+        })
+        .catch((error) => {
+          console.error("登入失敗：", error.message);
+          alert("登入失敗：" + error.message);
+        });
+    });
 
-    const minimax = (board, depth, isMax) => {
-        let res = checkWin(board);
-        if (res === "O") return 10 - depth;
-        if (res === "X") return depth - 10;
-        if (res === "D") return 0;
-        let best = isMax ? -Infinity : Infinity;
-        for (let i=0; i<9; i++) {
-            if (board[i] === "") {
-                board[i] = isMax ? "O" : "X";
-                let v = minimax(board, depth + 1, !isMax);
-                board[i] = "";
-                best = isMax ? Math.max(best, v) : Math.min(best, v);
-            }
-        }
-        return best;
-    };
+    // 5. 登出事件
+    logoutBtn.addEventListener("click", () => {
+      signOut(auth).then(() => {
+        console.log("已登出");
+        currentScoreSpan.textContent = "尚未讀取";
+        scoreInput.value = "";
+      });
+    });
 
-    const getBestMove = (board) => {
-        let moves = [], bestScore = -Infinity;
-        for (let i=0; i<9; i++) {
-            if (board[i] === "") {
-                board[i] = "O";
-                let s = minimax(board, 0, false);
-                board[i] = "";
-                if (s > bestScore) { bestScore = s; moves = [i]; }
-                else if (s === bestScore) moves.push(i);
-            }
-        }
-        return moves[Math.floor(Math.random() * moves.length)];
-    };
+    // 6. 監聽驗證狀態改變 (AuthState)
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // 使用者已登入
+        currentUser = user;
+        userNameSpan.textContent = user.displayName;
+        userUidSpan.textContent = user.uid;
 
-    const getRandomHumanMove = (board) => {
-        let av = board.map((v, i) => v===""?i:null).filter(v=>v!==null);
-        let move = av[Math.floor(Math.random() * av.length)];
-        if (EDGES.includes(move) && Math.random() < 0.7 && av.some(v => CORNERS.includes(v))) {
-            let cornersAvailable = av.filter(v => CORNERS.includes(v));
-            return cornersAvailable[Math.floor(Math.random() * cornersAvailable.length)];
-        }
-        return move;
-    };
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        userInfo.style.display = "block";
+      } else {
+        // 使用者未登入 / 已登出
+        currentUser = null;
+        loginBtn.style.display = "inline-block";
+        logoutBtn.style.display = "none";
+        userInfo.style.display = "none";
+      }
+    });
 
-    const getLogicalMove = (board, level) => {
-        let activeLevel = (level === 'random') ? currentRandomDiff : level;
-        if (activeLevel === 'easy') {
-            let av = board.map((v, i) => v===""?i:null).filter(v=>v!==null);
-            return av[Math.floor(Math.random() * av.length)];
-        }
-        let roll = Math.random();
-        let needsLogic = !(activeLevel === 'chaos' && roll >= 0.8);
-        if (needsLogic) {
-            for(let i=0; i<9; i++){ if(board[i]===""){ board[i]="O"; if(checkWin(board)==="O"){ board[i]=""; return i; } board[i]=""; } }
-            for(let i=0; i<9; i++){ if(board[i]===""){ board[i]="X"; if(checkWin(board)==="X"){ board[i]=""; return i; } board[i]=""; } }
-            if (board[CENTER] === "") return CENTER;
-        }
-        if (activeLevel === 'hard') return getBestMove(board);
-        if (activeLevel === 'mid') return (Math.random() < 0.35) ? getBestMove(board) : getRandomHumanMove(board);
-        if (activeLevel === 'chaos') {
-            if (roll < 0.3) return getBestMove(board);
-            if (roll < 0.8) return getRandomHumanMove(board);
-            let av = board.map((v, i) => v===""?i:null).filter(v=>v!==null);
-            return av[Math.floor(Math.random() * av.length)];
-        }
-        return getRandomHumanMove(board);
-    };
+    // 7. 寫入分數至資料庫 (scores/$uid)
+    saveScoreBtn.addEventListener("click", () => {
+      if (!currentUser) return;
 
-    const update = () => {
-        const xc = document.getElementById('cX').value, oc = document.getElementById('cO').value;
-        document.body.style.backgroundColor = document.getElementById('cBg').value;
-        document.querySelectorAll('.cell').forEach((el, i) => { el.innerText = b[i]; el.style.color = b[i] === "X" ? xc : oc; });
-        document.getElementById('sX').innerText = `X: ${scores.X}`; document.getElementById('sO').innerText = `O: ${scores.O}`; document.getElementById('sD').innerText = `平手: ${scores.D}`;
-        const win = checkWin(b), msgEl = document.getElementById('msg');
-        let diffLabel = { 'hard': '大師', 'mid': '常人', 'chaos': '變化', 'easy': '入門' };
-        let statusText = "輪到 " + turn;
-        if (isPvC && document.getElementById('diff').value === 'random' && !win && b.filter(v=>v!=="").length === 0) {
-            statusText += ` (挑戰${diffLabel[currentRandomDiff]})`;
-        }
-        msgEl.innerText = win ? (win==="D"?"平局！":win+" 獲勝！") : statusText;
-        if (isThinking) { msgEl.classList.add('hidden'); document.getElementById('thinkOverlay').style.display = 'flex'; }
-        else { msgEl.classList.remove('hidden'); document.getElementById('thinkOverlay').style.display = 'none'; }
-    };
+      const scoreVal = Number(scoreInput.value);
+      if (isNaN(scoreVal)) {
+        alert("請輸入有效的數字！");
+        return;
+      }
 
-    const rollDifficulty = () => {
-        if (document.getElementById('diff').value === 'random') {
-            const rand = Math.random();
-            if (rand < 0.333) currentRandomDiff = "mid";
-            else if (rand < 0.666) currentRandomDiff = "hard";
-            else currentRandomDiff = "chaos";
-        }
-    };
+      // 建立對應此使用者的專屬節點路徑：scores/使用者UID
+      const userScoreRef = ref(database, `scores/${currentUser.uid}`);
 
-    // 儲存玩家在電腦模式贏的累積勝場數
-    async function uploadScore() {
-        if (currentUser && isPvC) {
-            try {
-                await set(ref(db, 'xo_scores/' + currentUser.uid), {
-                    name: currentUser.displayName || "神秘高手",
-                    wins: scores.X, // 記錄對抗電腦時玩家 X 的贏球數
-                    timestamp: Date.now()
-                });
-            } catch (e) {
-                console.error("雲端上傳失敗:", e);
-            }
-        }
-    }
+      set(userScoreRef, {
+        score: scoreVal,
+        updatedAt: new Date().toISOString()
+      })
+      .then(() => {
+        alert("分數儲存成功！");
+        currentScoreSpan.textContent = scoreVal;
+      })
+      .catch((error) => {
+        console.error("寫入失敗：", error);
+        alert("權限不足或寫入失敗！");
+      });
+    });
 
-    function updateUserUI(user) {
-        const statusText = document.getElementById('authStatus');
-        const loginBtn = document.getElementById('loginBtn');
-        if (user) {
-            currentUser = user;
-            statusText.innerText = `玩家：${user.displayName || '雲端玩家'}`;
-            statusText.style.color = "#007aff";
-            loginBtn.style.display = 'none';
-        } else {
-            currentUser = null;
-            statusText.innerText = "遊客模式 (成績不計排行)";
-            statusText.style.color = "#666";
-            loginBtn.style.display = 'inline-block';
-        }
-    }
+    // 8. 從資料庫讀取分數 (scores/$uid)
+    readScoreBtn.addEventListener("click", () => {
+      if (!currentUser) return;
 
-    return {
-        init: () => {
-            // Firebase 登入邏輯
-            getRedirectResult(auth).then(res => { if (res && res.user) updateUserUI(res.user); }).catch(e => console.log(e));
-            onAuthStateChanged(auth, user => updateUserUI(user));
-            document.getElementById('loginBtn').onclick = () => signInWithRedirect(auth, provider);
+      const userScoreRef = ref(database, `scores/${currentUser.uid}`);
 
-            // 排行榜實時監聽 (按勝場數排序，從多到少)
-            const rankRef = query(ref(db, 'xo_scores'), orderByChild('wins'), limitToLast(5));
-            onValue(rankRef, (snapshot) => {
-                let html = "";
-                let list = [];
-                snapshot.forEach(child => { list.push(child.val()); });
-                list.reverse(); // 因為 limitToLast 是從小到大，反轉後變成從大到小
-                list.forEach((data, idx) => {
-                    html += `<div class="rank-item"><span>${idx+1}. ${data.name}</span><strong>${data.wins} 勝 👑</strong></div>`;
-                });
-                document.getElementById('leaderboard').innerHTML = html || "暫無紀錄，快來當第一名！";
-            });
+      get(userScoreRef)
+        .then((snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            currentScoreSpan.textContent = `${data.score} (更新時間: ${data.updatedAt})`;
+          } else {
+            currentScoreSpan.textContent = "尚無分數資料";
+          }
+        })
+        .catch((error) => {
+          console.error("讀取失敗：", error);
+          alert("讀取失敗！");
+        });
+    });
+  </script>
 
-            rollDifficulty();
-            document.querySelectorAll('.cell').forEach(el => {
-                el.onclick = () => {
-                    const i = parseInt(el.dataset.i);
-                    if (b[i] !== "" || checkWin(b) || isThinking) return;
-                    b[i] = turn;
-                    let res = checkWin(b);
-                    if (!res) {
-                        if (isPvC) {
-                            isThinking = true; update();
-                            setTimeout(() => {
-                                let m = getLogicalMove(b, document.getElementById('diff').value);
-                                if (m !== undefined && m !== -1) b[m] = "O";
-                                isThinking = false;
-                                let finalRes = checkWin(b); 
-                                if (finalRes) { 
-                                    if (finalRes === "D") scores.D++; 
-                                    else { scores[finalRes]++; if(finalRes === "X") uploadScore(); }
-                                }
-                                update();
-                            }, 550);
-                        } else { turn = (turn === "X") ? "O" : "X"; update(); }
-                    } else { 
-                        if (res === "D") scores.D++; 
-                        else { scores[res]++; if(res === "X") uploadScore(); }
-                        update(); 
-                    }
-                };
-            });
-            
-            document.getElementById('modeBtn').onclick = function() { isPvC = !isPvC; this.innerText = isPvC ? "模式：對戰電腦" : "模式：雙人對戰"; Game.reset(); };
-            document.getElementById('diff').onchange = () => Game.reset();
-            document.getElementById('resetBtn').onclick = () => Game.reset();
-            document.getElementById('clearBtn').onclick = () => Game.clearScores();
-            ['cBg', 'cX', 'cO'].forEach(id => document.getElementById(id).oninput = update);
-            update();
-        },
-        reset: () => { b = Array(9).fill(""); turn = "X"; isThinking = false; rollDifficulty(); update(); },
-        clearScores: () => { if(confirm("確定重置所有分數紀錄？")) { scores = {X:0,O:0,D:0}; Game.reset(); } }
-    };
-})();
-
-window.onload = Game.init;
-</script>
 </body>
 </html>
